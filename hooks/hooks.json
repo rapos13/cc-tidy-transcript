@@ -1,0 +1,4 @@
+{
+  "description": "The mod's function hooks",
+  "modules": ["./register.ts"]
+}

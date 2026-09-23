@@ -1,0 +1,8 @@
+{
+  "name": "claude-cli-mod",
+  "version": "0.1.0",
+  "description": "A Claude Code mod: a plugin whose behaviour lives in a hooks module of function hooks.",
+  "author": {
+    "name": "Illés Attila"
+  }
+}
