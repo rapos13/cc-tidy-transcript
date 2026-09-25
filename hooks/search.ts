@@ -1,28 +1,20 @@
-import type { BuiltinToolInputs, BuiltinToolResults, On } from 'claude-code'
+import type { BuiltinToolInputs, BuiltinToolResults } from 'claude-code'
 
-import { pendingOf, registerRuns, type RunCall } from './runs'
+import { pendingOf, type Call, type Line } from './line'
 
 /**
- * Draws Grep and Glob calls as one compact `Search` line each, what was
- * searched and how many results it found, and collapses each run of
- * consecutive searches into one block: `Search N patterns`, then one `⎿`
- * line per search.
- *
- * @param on the engine's registrar
+ * A Grep or Glob call's line: `Search`, what was searched and how many
+ * results it found: `Search "TODO" in src · glob *.ts · 12 files`.
  */
-export function registerSearchRuns(on: On) {
-  registerRuns(on, {
-    tools: ['Grep', 'Glob'],
-    header: (count) => ['Search', `${count} patterns`],
-    line: (call) => ['Search', queryOf(call), countOf(call)],
-  })
+export function searchLine(call: Call): Line {
+  return ['Search', queryOf(call), countOf(call)]
 }
 
 /**
  * What a search looked for: a Grep's pattern quoted, a Glob's bare, then
  * where and through which filters: `"TODO" in src · glob *.ts · -i`.
  */
-function queryOf(call: RunCall): string {
+function queryOf(call: Call): string {
   if (call.tool === 'Glob') {
     const input = (call.input ?? {}) as Partial<BuiltinToolInputs['Glob']>
     return [input.pattern ?? '…', input.path && `in ${input.path}`].filter(Boolean).join(' ')
@@ -44,7 +36,7 @@ function queryOf(call: RunCall): string {
  * `40 lines`, `7 matches in 3 files`; a `+` when a limit cut the list short;
  * its state while unresolved.
  */
-function countOf(call: RunCall): string {
+function countOf(call: Call): string {
   const pending = pendingOf(call, 'searching…')
   if (pending) return pending
 

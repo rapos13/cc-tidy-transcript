@@ -1,23 +1,14 @@
-import type { BuiltinToolResults, On } from 'claude-code'
+import type { BuiltinToolResults } from 'claude-code'
 
-import { pendingOf, registerRuns, type RunCall } from './runs'
+import { pendingOf, type Call, type Line } from './line'
 
-/**
- * Collapses each run of consecutive Read calls into one block: `Read N files`,
- * then one `⎿` line per file with the lines it read.
- *
- * @param on the engine's registrar
- */
-export function registerReadRuns(on: On) {
-  registerRuns(on, {
-    tools: ['Read'],
-    header: (count) => ['Read', `${count} files`],
-    line: (call) => ['Read', pathOf(call), rangeOf(call)],
-  })
+/** A Read call's line: `Read <path> · lines 1-64`. */
+export function readLine(call: Call): Line {
+  return ['Read', pathOf(call), rangeOf(call)]
 }
 
 /** The file a Read call names, as the model gave it. */
-function pathOf(call: RunCall): string {
+function pathOf(call: Call): string {
   const input = (call.input ?? {}) as { file_path?: unknown }
   return typeof input.file_path === 'string' ? input.file_path : '…'
 }
@@ -26,7 +17,7 @@ function pathOf(call: RunCall): string {
  * What a Read call read: `lines 1-64`, `lines 1-10 of 14424` for part of a
  * file, the kind for a file that is not text; its state while unresolved.
  */
-function rangeOf(call: RunCall): string {
+function rangeOf(call: Call): string {
   const pending = pendingOf(call, 'reading…')
   if (pending) return pending
 

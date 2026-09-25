@@ -1,7 +1,6 @@
 import type { On } from 'claude-code'
 
-import { registerReadRuns } from './read-runs'
-import { registerSearchRuns } from './search-runs'
+import { registerCompactRows } from './compact-rows'
 
 /**
  * Registers the plugin's hooks.
@@ -9,6 +8,5 @@ import { registerSearchRuns } from './search-runs'
  * @param on the engine's registrar
  */
 export function register(on: On) {
-  registerReadRuns(on)
-  registerSearchRuns(on)
+  registerCompactRows(on)
 }
