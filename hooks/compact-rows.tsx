@@ -10,7 +10,7 @@ import { StretchMarks } from './stretch'
  * The line of each tool drawn compact. The `ToolUse` matcher below spells the
  * same names literally, which `claude plugin validate` needs to read them.
  */
-const LINES: Partial<Record<string, (call: Call) => Line>> = {
+const LINES: Partial<Record<string, (call: Call, root: string | undefined) => Line>> = {
   Read: readLine,
   Grep: searchLine,
   Glob: searchLine,
@@ -27,8 +27,9 @@ const continuesStretch = atom(CONTINUES, false)
 
 /**
  * Draws each Read, Grep and Glob row of an expanded tool group (verbose
- * output, ctrl+o) as one line: a bullet, the tool's name, what it touched and
- * the result. A stretch of such rows is set off by one empty line above it,
+ * output, ctrl+o) compact: a bullet and `Name(args)`, paths relative to the
+ * project root (a path outside it whole, italic, after a yellow `◆`), then
+ * the result on a `⎿` line once it arrived. A stretch of such rows is set off by one empty line above it,
  * none between them; other tools' rows draw as the engine draws them.
  *
  * Each row draws from its own props, so the engine redraws a row alone when
@@ -53,21 +54,33 @@ export function registerCompactRows(on: On) {
     if (!line) return next(e)
     const { Box, Text } = $.ui.resolve(e)
 
-    const [name, subject, detail] = line(e.props)
+    const { name, args, result } = line(e.props, await $.session.root())
     const isErrored = e.props.isErrored || e.props.isInterrupted
     const isDone = e.props.output !== undefined
     const continues = await read($, memberOf(continuesStretch, e))
 
     return (
-      <Box marginTop={continues ? 0 : 1}>
+      <Box flexDirection="column" marginTop={continues ? 0 : 1}>
         <Text>
           <Text color={isErrored ? 'red' : isDone ? 'green' : undefined} dimColor={!isDone}>
             {'● '}
           </Text>
-          <Text bold>{`${name} `}</Text>
-          <Text>{subject}</Text>
-          <Text dimColor>{` · ${detail}`}</Text>
+          <Text bold>{name}</Text>
+          {'('}
+          {args.map((part, i) => (
+            <Text>
+              {`${i === 0 ? '' : ', '}${part.label === undefined ? '' : `${part.label}: `}`}
+              {part.isOutside && <Text color="yellow">{'◆ '}</Text>}
+              <Text italic={part.isOutside}>{part.text}</Text>
+            </Text>
+          ))}
+          {')'}
         </Text>
+        {result !== undefined && (
+          <Text color={isErrored ? 'red' : undefined} dimColor={!isErrored}>
+            {`  ⎿  ${result}`}
+          </Text>
+        )}
       </Box>
     )
   })
