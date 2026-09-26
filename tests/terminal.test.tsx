@@ -35,6 +35,10 @@ const mountRow = (engine: Engine, props: Row) =>
 const shown = async (row: Awaited<ReturnType<typeof mountRow>>) =>
   (await row.findAll({ type: 'Text', text: /^line /, in: 'output' })).map(t => t.text)
 
+/** The gutter's glyphs, top to bottom. */
+const gutterOf = async (row: Awaited<ReturnType<typeof mountRow>>) =>
+  (await row.findAll({ type: 'Text', text: /^[●│]$/ })).map(t => t.text)
+
 /** The counts above and below a Client body's lines. */
 const counts = async (row: Awaited<ReturnType<typeof mountRow>>) =>
   (await row.findAll({ type: 'Text', text: /^[↑↓] /, in: 'output' })).map(t => t.text)
@@ -44,13 +48,27 @@ test('a running row ticks seconds in its body', async ($, on) => {
   const row = await mountRow($, BASH)
   expect(await row.find({ text: '$ git log --oneline' })).toBeDefined()
   expect((await row.find({ text: /^# / }))?.text).toBe('# Show recent commits')
-  // Three rows of text; unmeasured, the gutter over-counts (its extra rows are clipped).
-  const gutter = (await row.findAll({ type: 'Text', text: /^[●│]$/ })).map(t => t.text)
-  expect(gutter[0]).toBe('●')
-  expect(gutter.length).toBeGreaterThanOrEqual(3)
+  expect(await gutterOf(row)).toEqual(['●', '│', '│'])
 
   await row.advance(3000)
   expect((await row.find({ type: 'Text', in: 'running' }))?.text).toBe('running… 3s')
+})
+
+test('the gutter has one glyph per row: long lines are wrapped by the row, never by the surface', async ($, on) => {
+  drawAsEngine(on)
+  const command = 'echo alpha beta gamma delta epsilon'
+  const row = await $.ui.mount({
+    plugin: PLUGIN,
+    surface: 'terminal',
+    component: 'ToolUse',
+    requestId: 'toolu_bash',
+    props: { ...done('one\ntwo'), input: { command, description: 'Print some Greek letters' } },
+    viewport: { columns: 24, rows: 40 },
+  })
+  // 24 columns, less the gutter and the margin: 20 to each row.
+  const rows = (await row.findAll({ type: 'Text' })).filter(t => !/^[●│]$/.test(t.text)).map(t => t.text)
+  expect(rows).toEqual(['$ echo alpha beta', 'gamma delta epsilon', '# Print some Greek', 'letters', 'one', 'two'])
+  expect((await gutterOf(row)).length).toBe(rows.length)
 })
 
 test('short output draws in the row, with no Client', async ($, on) => {

@@ -142,6 +142,66 @@ function expandTabs(line: string): string {
   return out
 }
 
+/**
+ * A line broken into rows at most `width` cells wide, at spaces where it can,
+ * inside a word where one is wider than a row. Each row is then drawn
+ * truncating, so the rows the text takes are known, not left to the surface.
+ */
+export function wrap(line: string, width: number): string[] {
+  const rows: string[] = []
+  let row = ''
+  for (const word of line.split(/(?<= )/)) {
+    if (row !== '' && cellsOf(row + word.trimEnd()) > width) {
+      rows.push(row.trimEnd())
+      row = ''
+    }
+    row += word
+    for (let at = fitting(row, width); cellsOf(row.trimEnd()) > width && at < row.length; at = fitting(row, width)) {
+      rows.push(row.slice(0, at))
+      row = row.slice(at)
+    }
+  }
+  rows.push(row.trimEnd())
+  return rows
+}
+
+/** East Asian wide and fullwidth characters, and emoji: two cells each. */
+const WIDE: [number, number][] = [
+  [0x1100, 0x115f],
+  [0x2e80, 0xa4cf],
+  [0xac00, 0xd7a3],
+  [0xf900, 0xfaff],
+  [0xfe30, 0xfe4f],
+  [0xff00, 0xff60],
+  [0xffe0, 0xffe6],
+  [0x1f300, 0x1faff],
+  [0x20000, 0x3fffd],
+]
+
+/** The cells a text takes in a terminal. */
+function cellsOf(text: string): number {
+  let cells = 0
+  for (const ch of text) cells += cellOf(ch)
+  return cells
+}
+
+function cellOf(ch: string): number {
+  const code = ch.codePointAt(0) ?? 0
+  return WIDE.some(([from, to]) => code >= from && code <= to) ? 2 : 1
+}
+
+/** How many code units of `text` fit in `width` cells; at least one character. */
+function fitting(text: string, width: number): number {
+  let cells = 0
+  let at = 0
+  for (const ch of text) {
+    cells += cellOf(ch)
+    if (cells > width && at > 0) break
+    at += ch.length
+  }
+  return at
+}
+
 /** Keeps the tail of the output within `BODY_BUDGET` serialized characters. */
 function clip(lines: OutputLine[]): OutputLine[] {
   let size = 0

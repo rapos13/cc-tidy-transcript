@@ -1,12 +1,21 @@
 import type { On } from 'claude-code'
 
-import { terminalOf, type Terminal } from './terminal-lines'
+import { terminalOf, wrap } from './terminal-lines'
 
 /** Output taller than this scrolls inside the row. */
 const ROWS = 10
 
 /** The columns before the text: the gutter's glyph and a space. */
 const INDENT = 2
+
+/**
+ * Columns kept free at the right: the viewport is the whole surface's
+ * width, not the row's, and a row wrapped too wide loses its end.
+ */
+const MARGIN = 2
+
+/** The width assumed when the surface has not measured. */
+const UNMEASURED = 80
 
 /**
  * Draws each Bash and PowerShell row as a mini terminal: the command, its
@@ -34,16 +43,21 @@ export function registerTerminal(on: On) {
     if (e.surface !== 'terminal') return next(e)
     const { Box, Text, Client } = $.ui.resolve(e)
 
-    const terminal = terminalOf(e.props)
-    const { description, status, command, body, footer } = terminal
+    const { description, status, command, body, footer } = terminalOf(e.props)
     const isFailed = status === 'failed'
-    const gutter = rowsOf(terminal, (e.viewport?.columns ?? 0) - INDENT)
+    const width = (e.viewport?.columns ?? UNMEASURED) - INDENT - MARGIN
+    const commandRows = command.flatMap(line => wrap(line, width))
+    const descriptionRows = description === undefined ? [] : wrap(`# ${description}`, width)
+    const outputRows = status === 'running' ? 1 : body.length > ROWS ? ROWS + 2 : body.length
+    const gutter = commandRows.length + descriptionRows.length + outputRows + footer.length
 
-    // The gutter is placed over the row's left columns, out of the flow: it
-    // spans the row's height, and the rows it has beyond that are clipped.
+    // The gutter is a column in the flow beside the text, one glyph per row:
+    // every row of text truncates, so the count is exact. Not an absolute
+    // box: in a row partly scrolled out of the transcript, one is placed
+    // against the row's first visible row, not its top.
     return (
-      <Box marginTop={1}>
-        <Box position="absolute" left={0} top={0} bottom={0} width={1} flexDirection="column" overflow="hidden">
+      <Box marginTop={1} flexDirection="row">
+        <Box flexDirection="column" width={1} flexShrink={0}>
           <Text color={isFailed ? 'red' : status === 'done' ? 'green' : undefined} dimColor={status === 'running'}>
             ●
           </Text>
@@ -53,15 +67,15 @@ export function registerTerminal(on: On) {
             </Text>
           ))}
         </Box>
-        <Box flexDirection="column" marginLeft={INDENT} flexGrow={1}>
-          {command.map(line => (
-            <Text>{line}</Text>
+        <Box flexDirection="column" marginLeft={INDENT - 1} flexGrow={1}>
+          {commandRows.map(line => (
+            <Text wrap="truncate">{line === '' ? ' ' : line}</Text>
           ))}
-          {description !== undefined && (
-            <Text italic dimColor>
-              {`# ${description}`}
+          {descriptionRows.map(line => (
+            <Text wrap="truncate" italic dimColor>
+              {line}
             </Text>
-          )}
+          ))}
           {status === 'running' ? (
             <Client key="running" module="./terminal-body.tsx" props={{ mode: 'running' }} height={1} />
           ) : body.length > ROWS ? (
@@ -82,18 +96,4 @@ export function registerTerminal(on: On) {
       </Box>
     )
   })
-}
-
-/**
- * At least as many rows as the row's text takes at `width` columns, so the
- * gutter never falls short; extra rows are clipped. Each character counts
- * as two columns (a wide one takes two), and without a measured width one
- * narrow enough to over-count is assumed.
- */
-function rowsOf({ description, status, command, body, footer }: Terminal, width: number): number {
-  const columns = width > 0 ? width : 20
-  const wrapped = (line: string) => Math.max(1, Math.ceil((line.length * 2) / columns))
-  const text = command.reduce((n, line) => n + wrapped(line), 0) + (description !== undefined ? wrapped(`# ${description}`) : 0)
-  const output = status === 'running' ? 1 : body.length > ROWS ? ROWS + 2 : body.length
-  return text + output + footer.length
 }

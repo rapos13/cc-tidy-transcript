@@ -1,6 +1,6 @@
 {
   "name": "tidy-transcript",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Makes the Claude Code transcript leaner: Read, Grep and Glob calls draw as one compact line each, Bash and PowerShell calls as a scrollable mini terminal.",
   "types": "./types/index.d.ts",
   "author": {

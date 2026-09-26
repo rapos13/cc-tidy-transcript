@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { Call } from '../hooks/line'
-import { CLIPPED, linesOf, terminalOf } from '../hooks/terminal-lines'
+import { CLIPPED, linesOf, terminalOf, wrap } from '../hooks/terminal-lines'
 
 const bash = (input: unknown, output?: unknown, flags: Partial<Call> = {}): Call => ({
   tool: 'Bash',
@@ -73,6 +73,19 @@ test('the record extras land in the footer', () => {
 test('escapes, carriage returns, tabs and controls come out as a terminal shows them', () => {
   expect(linesOf('\x1b[31mred\x1b[0m\r\n10%\r50%\r100%\na\tb\x07\n\n\n')).toEqual(['red', '100%', 'a       b'])
   expect(linesOf('\x1b]0;title\x07x')).toEqual(['x'])
+})
+
+test('a line wraps at spaces, inside a word only when the word is wider than a row', () => {
+  expect(wrap('', 10)).toEqual([''])
+  expect(wrap('$ ls -la', 10)).toEqual(['$ ls -la'])
+  expect(wrap('one two three four', 9)).toEqual(['one two', 'three', 'four'])
+  expect(wrap('ab abcdefghijkl', 5)).toEqual(['ab', 'abcde', 'fghij', 'kl'])
+  expect(wrap('    Get-Location', 20)).toEqual(['    Get-Location'])
+})
+
+test('a wide character takes two cells', () => {
+  expect(wrap('日本語テキスト', 6)).toEqual(['日本語', 'テキス', 'ト'])
+  expect(wrap('日本', 1)).toEqual(['日', '本'])
 })
 
 test('output past the budget keeps its tail under a clipped line', () => {
