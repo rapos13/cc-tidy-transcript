@@ -1,6 +1,7 @@
 import type { On } from 'claude-code'
 
 import { registerCompactRows } from './compact-rows'
+import { registerTerminal } from './terminal'
 
 /**
  * Registers the plugin's hooks.
@@ -9,4 +10,5 @@ import { registerCompactRows } from './compact-rows'
  */
 export function register(on: On) {
   registerCompactRows(on)
+  registerTerminal(on)
 }
