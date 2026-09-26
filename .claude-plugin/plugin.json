@@ -1,7 +1,7 @@
 {
-  "name": "claude-cli-mod",
+  "name": "tidy-transcript",
   "version": "0.1.0",
-  "description": "A Claude Code mod: a plugin whose behaviour lives in a hooks module of function hooks.",
+  "description": "Makes the Claude Code transcript leaner: Read, Grep and Glob calls draw as one compact line each.",
   "author": {
     "name": "Illés Attila"
   }
