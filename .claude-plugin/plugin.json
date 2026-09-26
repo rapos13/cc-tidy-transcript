@@ -2,6 +2,7 @@
   "name": "tidy-transcript",
   "version": "0.1.0",
   "description": "Makes the Claude Code transcript leaner: Read, Grep and Glob calls draw as one compact line each.",
+  "types": "./types/index.d.ts",
   "author": {
     "name": "Illés Attila"
   }

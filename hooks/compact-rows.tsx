@@ -1,9 +1,10 @@
-import type { On } from 'claude-code'
+import { atom, memberOf, read } from 'claude-code'
+import type { On, StateDollar } from 'claude-code'
 
 import type { Call, Line } from './line'
 import { readLine } from './read'
 import { searchLine } from './search'
-import { markContinuing } from './stretch'
+import { StretchMarks } from './stretch'
 
 /**
  * The line of each tool drawn compact. The `ToolUse` matcher below spells the
@@ -15,6 +16,15 @@ const LINES: Partial<Record<string, (call: Call) => Line>> = {
   Glob: searchLine,
 }
 
+const CONTINUES = { plugin: 'tidy-transcript', key: 'continuesStretch' } as const
+
+/**
+ * Whether a compact row continues a stretch (draws no blank line above), one
+ * member per row, by `tool_use_id`. False until its group marks it, which is
+ * right for a row outside any group.
+ */
+const continuesStretch = atom(CONTINUES, false)
+
 /**
  * Draws each Read, Grep and Glob row of an expanded tool group (verbose
  * output, ctrl+o) as one line: a bullet, the tool's name, what it touched and
@@ -22,24 +32,23 @@ const LINES: Partial<Record<string, (call: Call) => Line>> = {
  * none between them; other tools' rows draw as the engine draws them.
  *
  * Each row draws from its own props, so the engine redraws a row alone when
- * its call changes. The only thing a row cannot see is its neighbour: the
- * group hook marks the rows that continue a stretch, and asks for a redraw
- * only when that marking changes. A row not yet marked draws its empty line,
- * which is right for a row outside any group.
+ * its call changes. The only thing a row cannot see is its neighbour: its
+ * group can, and marks it in `continuesStretch`. The row reads its own member
+ * and is redrawn alone when that member changes. A draw may not write
+ * `$.state`, so the group hook queues the marks that changed and a timer
+ * writes them once the draw is over.
  *
  * @param on the engine's registrar
  */
 export function registerCompactRows(on: On) {
-  /** The compact calls, by `tool_use_id`, whose previous call in the group is compact too. */
-  const continuing = new Set<string>()
-  const isCompact = (call: { tool: string }) => LINES[call.tool] !== undefined
+  const marks = new StretchMarks(call => LINES[call.tool] !== undefined)
 
   on('ui.render', { component: 'ToolGroup', props: { isExpanded: true } }, ($, e, next) => {
-    if (markContinuing(e.props.calls, isCompact, continuing)) $.ui.invalidate('ui.render')
+    if (marks.note(e.props.calls)) $.clock.after(0, () => void writeMarks($, marks))
     return next(e)
   })
 
-  on('ui.render', { component: 'ToolUse', props: { tool: ['Read', 'Grep', 'Glob'] } }, ($, e, next) => {
+  on('ui.render', { component: 'ToolUse', props: { tool: ['Read', 'Grep', 'Glob'] } }, async ($, e, next) => {
     const line = LINES[e.props.tool]
     if (!line) return next(e)
     const { Box, Text } = $.ui.resolve(e)
@@ -47,9 +56,10 @@ export function registerCompactRows(on: On) {
     const [name, subject, detail] = line(e.props)
     const isErrored = e.props.isErrored || e.props.isInterrupted
     const isDone = e.props.output !== undefined
+    const continues = await read($, memberOf(continuesStretch, e))
 
     return (
-      <Box marginTop={continuing.has(e.props.tool_use_id) ? 0 : 1}>
+      <Box marginTop={continues ? 0 : 1}>
         <Text>
           <Text color={isErrored ? 'red' : isDone ? 'green' : undefined} dimColor={!isDone}>
             {'● '}
@@ -61,4 +71,26 @@ export function registerCompactRows(on: On) {
       </Box>
     )
   })
+}
+
+/**
+ * Writes the queued marks into `continuesStretch`, which redraws each row
+ * whose mark changed. Called from a timer, outside any draw.
+ *
+ * @param $ the hooks' `$`
+ * @param marks the group marks, whose queue it empties
+ */
+async function writeMarks($: StateDollar, marks: StretchMarks) {
+  for (const mark of marks.take()) {
+    const [id, continues] = mark
+    const ref = { ...CONTINUES, id }
+    try {
+      // After a hot reload the marks start empty while the host kept the
+      // values: skip a write that would only redraw the row unchanged.
+      if ((await $.state.get(ref)).value === continues) continue
+      await $.state.set(ref, continues)
+    } catch {
+      marks.forget(mark)
+    }
+  }
 }
